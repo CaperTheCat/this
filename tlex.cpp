@@ -192,7 +192,6 @@ ReservedTK ThisLexer::tlex() {
                 break;
             case '\"': case '\'':
                 read_string(current);
-                debug_token(TK_STR, buffer); // buffer has string
                 return TK_STR;
             case '.':
                 nom_nom();
