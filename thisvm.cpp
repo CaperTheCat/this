@@ -213,7 +213,6 @@ ThisVM::ThisVM() {
     // ehh this sucks and needs its own file eventually but whatever
     builtinModules_["io"]["print"] = [](const std::vector<Value>& args) -> Value {
         for (size_t i = 0; i < args.size(); ++i) {
-            if (i > 0) std::cout << " ";
             if (args[i].type == Value::STRING) {
                 std::cout << args[i].s;
             }
@@ -222,7 +221,6 @@ ThisVM::ThisVM() {
     };
     builtinModules_["io"]["println"] = [](const std::vector<Value>& args) -> Value {
         for (size_t i = 0; i < args.size(); ++i) {
-            if (i > 0) std::cout << " ";
             if (args[i].type == Value::STRING) {
                 std::cout << args[i].s;
             }
