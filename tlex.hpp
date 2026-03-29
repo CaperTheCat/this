@@ -3,19 +3,12 @@
 
 #include <this.hpp>
 
-#include <string>
-#include <iostream>
-#include <fstream>
-#include <variant>
-#include <cassert>
-#include <array>
-
 typedef std::variant<double, int, float, std::string> Semantics;
 
 enum ReservedTK {
     // basic 
     TK_INT, TK_END, TK_FLT,
-    // string-related
+    // string-related (rsv is reserved)
     TK_RSV, TK_STR, TK_NAME,
     // operators
     TK_ASSIGN,
@@ -23,8 +16,11 @@ enum ReservedTK {
     TK_LT, TK_LE, TK_GT, TK_GE, TK_EQ, TK_NE,
     // single char
     TK_LBRACE, TK_RBRACE, TK_COMMA, 
-    TK_DOT, TK_LPAREN, TK_RPAREN
+    TK_DOT, TK_LPAREN, TK_RPAREN, TK_COLON,
+    // special stuff
+    TK_ARROW /* -> */
 };
+
 struct Token {
     ReservedTK what;
     Semantics semantics;
@@ -53,7 +49,7 @@ class ThisLexer {
     THISI_FUNC void read_string(char end);
     THISI_FUNC ReservedTK tlex();
 
-    THISX_FUNC void       thisX_check(ReservedTK token);
+    THISX_FUNC void       thisX_check(ReservedTK token, const char* msg);
     THISX_FUNC void       thisX_next();
     THISX_FUNC ReservedTK thisX_lookahead();
 

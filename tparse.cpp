@@ -1,6 +1,5 @@
-#include "tparse.hpp"
-#include <iostream>
-#include <sstream>
+#include <this.hpp>
+#include <tparse.hpp>
 
 ThisParser::ThisParser(ThisLexer& lexer) : lexer(lexer) {
     advance(); // load first token
@@ -21,11 +20,11 @@ void ThisParser::advance() {
     currentToken = lexer.t;
 }
 
+// consumes the current token and advances, or sends an error if not expected with msg
 void ThisParser::consume(ReservedTK expected, const std::string& msg) {
     if (currentToken.what != expected) {
         std::ostringstream oss;
-        oss << "Expected token " << expected << " but got " << currentToken.what
-            << " at line " << lexer.current_line;
+        oss << "Line " << lexer.current_line << ": \"" << msg << '\"';
         thisX_error(oss.str());
     }
     advance();
@@ -44,8 +43,9 @@ bool ThisParser::check(ReservedTK tk) {
 }
 
 void ThisParser::thisX_error(const std::string& msg) {
-    std::cerr << "Parse error: " << msg << std::endl;
-    // welp
+    std::cerr << "Syntax error: " << msg << std::endl;
+    // leave
+    #undef THIS_GOOD
     exit(1);
 }
 
@@ -55,9 +55,8 @@ AstNodePtr ThisParser::thisX_parseProgram() {
         auto stmt = parseStatement();
         if (stmt) {
             program->statements.push_back(std::move(stmt));
-        } else {
-            advance(); // shouldn't happen but skip anyway
         }
+        // continue if nullptr
     }
     return program;
 }
@@ -92,6 +91,9 @@ AstNodePtr ThisParser::parseStatement() {
         else if (word == "while") {
             return parseWhileStmt();
         }
+        else if (word == "def") {
+            return parseFunctionDef();
+        }
         else {
             thisX_error("Unexpected reserved word: " + word);
         }
@@ -108,7 +110,7 @@ AstNodePtr ThisParser::parseStatement() {
     else {
         return parseExpr();
     }
-    // i don't want to bother figuring out this "doesn't always return" thing
+    return nullptr; // should never happen
 }
 
 AstNodePtr ThisParser::parseAssignStmt() {
@@ -151,6 +153,31 @@ AstNodePtr ThisParser::parsePrimary() {
 
 AstNodePtr ThisParser::parsePostfixExpr() {
     auto expr = parsePrimary();
+
+    if (auto varExpr = dynamic_cast<VariableExpr*>(expr.get())) {
+        if (importedModules_.find(varExpr->name) != importedModules_.end()) {
+            if (match(TK_DOT)) {
+                if (!check(TK_NAME)) thisX_error("Expected function name after '.'");
+                std::string funcName = std::get<std::string>(currentToken.semantics);
+                advance(); // consume function name
+
+                if (!match(TK_LPAREN)) {
+                    thisX_error("Expected '(' for module function call");
+                }
+                std::vector<AstNodePtr> args;
+                if (!check(TK_RPAREN)) {
+                    args.push_back(parseExpr());
+                    while (match(TK_COMMA)) {
+                        args.push_back(parseExpr());
+                    }
+                }
+                consume(TK_RPAREN, "Expected ')' after arguments");
+                return std::make_unique<ModuleCallExpr>(varExpr->name, funcName, std::move(args));
+            }
+            // must be a variable?
+        }
+    }
+
     while (true) {
         if (match(TK_DOT)) {
             if (!check(TK_NAME)) {
@@ -177,17 +204,12 @@ AstNodePtr ThisParser::parsePostfixExpr() {
 }
 
 AstNodePtr ThisParser::parseImportStmt() {
-    consume(TK_RSV, "Expected 'import'"); // eat import
-    if (!check(TK_NAME)) {
-        thisX_error("Expected module name after 'import'");
-    }
+    consume(TK_RSV, "Expected 'import'");
+    if (!check(TK_NAME)) thisX_error("Expected module name after 'import'");
     std::string moduleName = std::get<std::string>(currentToken.semantics);
-    // this sucks
-    if (moduleName != "io") {
-        thisX_error("Only 'io' module is supported");
-    }
+    importedModules_.insert(moduleName);
     advance(); // consume module name
-    return std::make_unique<ImportStmt>(moduleName);
+    return nullptr;  // no node
 }
 
 AstNodePtr ThisParser::parseBinary(int minPrec) {
@@ -225,6 +247,55 @@ AstNodePtr ThisParser::parseBinary(int minPrec) {
 
 AstNodePtr ThisParser::parseExpr() {
     return parseBinary(0);
+}
+
+AstNodePtr ThisParser::parseFunctionDef() {
+    consume(TK_RSV, "Expected 'def'");  // eat def
+    // func name
+    if (!check(TK_NAME)) thisX_error("Expected function name");
+    std::string name = std::get<std::string>(currentToken.semantics);
+    advance();
+
+    // params
+    consume(TK_LPAREN, "Expected '(' after function name");
+    std::vector<Parameter> params;
+    if (!check(TK_RPAREN)) {
+        do {
+            if (!check(TK_NAME)) thisX_error("Expected parameter name");
+            std::string paramName = std::get<std::string>(currentToken.semantics);
+            advance();
+
+            std::string paramType;
+            if (match(TK_COLON)) {
+                if (!check(TK_NAME)) thisX_error("Expected type name after ':'");
+                paramType = std::get<std::string>(currentToken.semantics);
+                advance();
+            }
+            params.push_back({paramName, paramType});
+        } while (match(TK_COMMA));
+    }
+    consume(TK_RPAREN, "Expected ')' after parameters");
+
+    // optional return type (might find use after type update)
+    std::string returnType;
+    if (match(TK_ARROW)) {
+        if (!check(TK_NAME)) thisX_error("Expected return type after '->'");
+        returnType = std::get<std::string>(currentToken.semantics);
+        advance();
+    }
+
+    // body
+    consume(TK_LBRACE, "Expected '{' before function body");
+    std::vector<AstNodePtr> body;
+    while (!check(TK_RBRACE) && !check(TK_END)) {
+        auto stmt = parseStatement();
+        if (stmt) body.push_back(std::move(stmt));
+        else advance();
+    }
+    consume(TK_RBRACE, "Expected '}' after function body");
+
+    return std::make_unique<FunctionDef>(name, std::move(params),
+                                         returnType, std::move(body));
 }
 
 AstNodePtr ThisParser::parseTable() {
