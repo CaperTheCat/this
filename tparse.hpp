@@ -1,13 +1,9 @@
 #ifndef TPARSE_HPP
 #define TPARSE_HPP
 
-#include "tlex.hpp"
-#include <vector>
-#include <memory>
-#include <string>
-#include <variant>
+#include <this.hpp>
+#include <tlex.hpp>
 
-// yeah
 enum class AstNodeType {
     PROGRAM,
     IMPORT_STMT,
@@ -18,7 +14,9 @@ enum class AstNodeType {
     MEMBER_ACCESS_EXPR,
     CALL_EXPR,
     WHILE_STMT,
-    BINARY_EXPR
+    BINARY_EXPR,
+    FUNCTION_DEF,
+    MODULE_CALL_EXPR
 };
 
 struct AstNode {
@@ -47,6 +45,15 @@ struct AssignStmt : AstNode {
     AstNodeType getType() const override { return AstNodeType::ASSIGN_STMT; }
 };
 
+struct ModuleCallExpr : AstNode {
+    std::string moduleName;
+    std::string funcName;
+    std::vector<AstNodePtr> arguments;
+    ModuleCallExpr(const std::string& mod, const std::string& func, std::vector<AstNodePtr> args)
+        : moduleName(mod), funcName(func), arguments(std::move(args)) {}
+    AstNodeType getType() const override { return AstNodeType::MODULE_CALL_EXPR; }
+};
+
 struct LiteralExpr : AstNode {
     std::variant<int, float, std::string> value;
     LiteralExpr(int v) : value(v) {}
@@ -64,6 +71,23 @@ struct VariableExpr : AstNode {
 struct TableExpr : AstNode {
     std::vector<AstNodePtr> elements;
     AstNodeType getType() const override { return AstNodeType::TABLE_EXPR; }
+};
+
+struct Parameter {
+    std::string name;
+    std::string type; // optional
+};
+
+struct FunctionDef : AstNode {
+    std::string name;
+    std::vector<Parameter> parameters;
+    std::string returnType; // optional
+    std::vector<AstNodePtr> body;
+    // he made a statement so epic even his family cherished him
+    FunctionDef(const std::string& n, std::vector<Parameter> params, 
+                const std::string& retType, std::vector<AstNodePtr> stmts)
+        : name(n), parameters(std::move(params)), returnType(retType), body(std::move(stmts)) {}
+    AstNodeType getType() const override { return AstNodeType::FUNCTION_DEF; }
 };
 
 struct WhileStmt : AstNode {
@@ -106,6 +130,7 @@ class ThisParser {
 
     ThisLexer& lexer;
     Token currentToken;
+    std::set<std::string> importedModules_;
 
     THISI_FUNC void advance();
     THISI_FUNC void consume(ReservedTK expected, const std::string& msg);
@@ -121,6 +146,7 @@ class ThisParser {
     THISI_FUNC AstNodePtr parsePostfixExpr();
     THISI_FUNC AstNodePtr parseExpr();
     THISI_FUNC AstNodePtr parseTable();
+    THISI_FUNC AstNodePtr parseFunctionDef();
 };
 
 #endif // TPARSE_HPP

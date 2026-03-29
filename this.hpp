@@ -1,7 +1,21 @@
 #ifndef THIS_HPP
 #define THIS_HPP
 
+// all c++ headers just go here
 #include <string>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <map>
+#include <variant>
+#include <cstdint>
+#include <set>
+#include <iostream>
+#include <iomanip>
+#include <functional>
+#include <memory>
+#include <cassert>
+#include <array>
 
 // if all is functional
 #define THIS_GOOD

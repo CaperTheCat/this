@@ -1,9 +1,9 @@
 // epic lexer for [this]
 
-#include <tlex.hpp>
 #include <this.hpp>
+#include <tlex.hpp>
 
-std::array<std::string, 6> RESERVED_WORDS = {"import", "int", "float", "string", "void", "while"};
+std::array<std::string, 7> RESERVED_WORDS = {"import", "int", "float", "string", "void", "while", "def"};
 
 ThisLexer::ThisLexer(const std::string& source) : source_(source) {
     icurrent = 0;
@@ -32,11 +32,6 @@ std::string thisD_rtstr(ReservedTK token) {
     }
 }
 #endif
-
-static void debug_token(ReservedTK tk, const std::string& sem = "") {
-    if (!sem.empty()) std::cout << " (" << sem << ")";
-    std::cout << std::endl;
-}
 
 // eat and advance
 void ThisLexer::nom_nom() {
@@ -76,12 +71,12 @@ void ThisLexer::read_string(char end) {
     while (current != end) {
         if (current == '\0') {
             // unterminated string
-            thisX_check(TK_END);
+            thisX_check(TK_END, "Unterminated string");
             return;
         }
         if (current == '\n' || current == '\r') {
             // unterminated string across lines
-            thisX_check(TK_END);
+            thisX_check(TK_END, "Unterminated string");
             return;
         }
         if (current == '\\') {
@@ -111,18 +106,21 @@ ReservedTK ThisLexer::tlex() {
     for (;;) {
         switch(current) {
             case '/':
-                nom_nom(); // consume '/'
+                nom_nom();
                 if (current == '/') { // line comment
                     while (current != '\n' && current != '\r' && current != '\0') {
                         nom_nom();
                     }
                     break;  // continue scanning
                 }
-                return TK_DIV;   // division operator
+                return TK_DIV;   // single then
             case '-':
                 nom_nom();
+                if (current == '>') { // arrow (->)
+                    nom_nom();
+                    return TK_ARROW;
+                }
                 return TK_SUB;
-
             case '{':
                 nom_nom();
                 return TK_LBRACE;
@@ -171,7 +169,7 @@ ReservedTK ThisLexer::tlex() {
                     nom_nom();
                     return TK_NE;
                 }
-                thisX_check(TK_END); // crude error
+                thisX_check(TK_END, "Did you mean '!='?"); // no single
                 return TK_END;
             // skip this line we're at end
             case '\n': case '\r':
@@ -190,6 +188,9 @@ ReservedTK ThisLexer::tlex() {
                     nom_nom();
                 }
                 break;
+            case ':':
+                nom_nom();
+                return TK_COLON;
             case '\"': case '\'':
                 read_string(current);
                 return TK_STR;
@@ -219,8 +220,8 @@ ReservedTK ThisLexer::tlex() {
                         return TK_NAME;
                     }
                 }
-                // wha?
-                thisX_check(TK_END);
+                // end?
+                thisX_check(TK_END, "idk ur cooked");
                 return TK_END;
         }
     }
@@ -238,7 +239,6 @@ ReservedTK ThisLexer::handle_num() {
     if (first == '0' && check_next('x')) { // hex?
         write_buffer('x'); // force this in
         nom_nom();
-        std::cerr << "current is: " << current << ".\n";
     }
     while (isdigit(current)) {               // gather all digits
         write_buffer(current);
@@ -287,11 +287,11 @@ ReservedTK ThisLexer::thisX_lookahead() {
 }
 
 // check if a token is that and error if no
-void ThisLexer::thisX_check(ReservedTK token) {
+void ThisLexer::thisX_check(ReservedTK token, const char* msg) {
     if (t.what != token) {
-        std::cerr << "oh no, " << thisD_rtstr(t.what) << "isn't " << thisD_rtstr(token);
+        std::cerr << "Syntax Error: Line " << current_line << ": \"" << msg << '\"';
         // insert gi-hun face here
         #undef THIS_GOOD
-        std::abort();
+        exit(1);
     }
 }
