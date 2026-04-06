@@ -374,3 +374,43 @@ void ThisVM::printValue(const Value& v) {
         case Value::BOOL: std::cout << (v.b ? "true" : "false"); break;
     }
 }
+
+ThisVM::ThisVM() {
+    // ehh this sucks and needs its own file eventually but whatever
+    builtinModules_["io"]["print"] = [](const std::vector<Value>& args) -> Value {
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (args[i].type == Value::STRING) {
+                std::cout << args[i].s;
+            }
+        }
+        return Value(); // nil
+    };
+    builtinModules_["io"]["println"] = [](const std::vector<Value>& args) -> Value {
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (args[i].type == Value::STRING) {
+                std::cout << args[i].s;
+            }
+        }
+        std::cout << "\n";
+        return Value(); // nil
+    };
+    builtinModules_["io"]["input"] = []( [[maybe_unused]] const std::vector<Value>& args) -> Value {
+        std::string line;
+        std::getline(std::cin, line);
+        return Value(line);
+    };
+}
+
+int main(int argc, char** argv) {
+    if (argc < 2) {
+        std::cerr << "Usage: tvm <*.tbc>\n";
+        return 1;
+    }
+    ThisVM vm;
+    if (!vm.thisX_load(argv[1])) {
+        std::cerr << "Failed to load bytecode\n";
+        return 1;
+    }
+    vm.thisX_run();
+    return 0;
+}

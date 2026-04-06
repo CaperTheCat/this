@@ -22,6 +22,4 @@ import io
 io.print("Hello World!")
 ```
 
-Put it in a `.this` file and run the exe on it.
-
 Have fun with it and make cool stuff. All of it is licensed under MIT, so play around however you like.
