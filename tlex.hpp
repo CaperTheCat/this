@@ -13,7 +13,7 @@ enum ReservedTK {
     // operators
     TK_ASSIGN,
     TK_ADD, TK_SUB, TK_MUL, TK_DIV, TK_MOD,
-    TK_LT, TK_LE, TK_GT, TK_GE, TK_EQ, TK_NE,
+    TK_LT, TK_LE, TK_GT, TK_GE, TK_EQ, TK_NE, TK_AND, TK_OR,
     // single char
     TK_LBRACE, TK_RBRACE, TK_COMMA, 
     TK_DOT, TK_LPAREN, TK_RPAREN, TK_COLON,

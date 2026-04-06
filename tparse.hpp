@@ -16,7 +16,8 @@ enum class AstNodeType {
     WHILE_STMT,
     BINARY_EXPR,
     FUNCTION_DEF,
-    MODULE_CALL_EXPR
+    MODULE_CALL_EXPR,
+    IF_STMT
 };
 
 struct AstNode {
@@ -55,9 +56,10 @@ struct ModuleCallExpr : AstNode {
 };
 
 struct LiteralExpr : AstNode {
-    std::variant<int, float, std::string> value;
+    std::variant<int, float, bool, std::string> value;
     LiteralExpr(int v) : value(v) {}
     LiteralExpr(float v) : value(v) {}
+    LiteralExpr(bool v) : value(v) {}
     LiteralExpr(const std::string& v) : value(v) {}
     AstNodeType getType() const override { return AstNodeType::LITERAL_EXPR; }
 };
@@ -98,8 +100,20 @@ struct WhileStmt : AstNode {
     AstNodeType getType() const override { return AstNodeType::WHILE_STMT; }
 };
 
+struct IfStmt : AstNode {
+    AstNodePtr condition;
+    std::vector<AstNodePtr> body;
+    std::vector<std::pair<AstNodePtr, std::vector<AstNodePtr>>> elifs; // condition, body
+    std::vector<AstNodePtr> elseBody;
+    IfStmt(AstNodePtr cond, std::vector<AstNodePtr> stmts,
+           std::vector<std::pair<AstNodePtr, std::vector<AstNodePtr>>> el,
+           std::vector<AstNodePtr> elseB)
+        : condition(std::move(cond)), body(std::move(stmts)), elifs(std::move(el)), elseBody(std::move(elseB)) {}
+    AstNodeType getType() const override { return AstNodeType::IF_STMT; }
+};
+
 struct BinaryExpr : AstNode {
-    enum Op { ADD, SUB, MUL, DIV, MOD, LT, LE, GT, GE, EQ, NE } op;
+    enum Op { ADD, SUB, MUL, DIV, MOD, LT, LE, GT, GE, EQ, NE, AND, OR } op;
     AstNodePtr left;
     AstNodePtr right;
     BinaryExpr(Op o, AstNodePtr l, AstNodePtr r)
@@ -140,6 +154,7 @@ class ThisParser {
     THISI_FUNC AstNodePtr parseStatement();
     THISI_FUNC AstNodePtr parseImportStmt();
     THISI_FUNC AstNodePtr parseWhileStmt();
+    THISI_FUNC AstNodePtr parseIfStmt();
     THISI_FUNC AstNodePtr parseBinary( int minPrec);
     THISI_FUNC AstNodePtr parseAssignStmt();
     THISI_FUNC AstNodePtr parsePrimary();
