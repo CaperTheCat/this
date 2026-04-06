@@ -1,7 +1,7 @@
-
 #include <this.hpp>
 #include <thisc.hpp>
 #include <thisvm.hpp>
+#include <tinit.hpp>
 
 bool ThisVM::thisX_load(const std::string& filename) {
     std::ifstream in(filename, std::ios::binary);
@@ -35,6 +35,10 @@ bool ThisVM::thisX_load(const std::string& filename) {
             std::string s(len, '\0');
             in.read(&s[0], len);
             constants_[i] = Value(s);
+        } else if (type == 3) { // bool
+            bool val;
+            in.read(reinterpret_cast<char*>(&val), 1);
+            constants_[i] = Value(val);
         }
     }
 
@@ -94,8 +98,147 @@ void ThisVM::thisX_run() {
             case OP_ADD: {
                 Value b = stack_.back(); stack_.pop_back();
                 Value a = stack_.back(); stack_.pop_back();
-                // type promotion as before
-                stack_.push_back(Value(a.i + b.i));
+                if (a.type == Value::INT && b.type == Value::INT) {
+                    stack_.push_back(Value(a.i + b.i));
+                } else if (a.type == Value::FLOAT && b.type == Value::FLOAT) {
+                    stack_.push_back(Value(a.f + b.f));
+                } else if (a.type == Value::INT && b.type == Value::FLOAT) {
+                    stack_.push_back(Value(a.i + b.f));
+                } else if (a.type == Value::FLOAT && b.type == Value::INT) {
+                    stack_.push_back(Value(a.f + b.i));
+                }
+                break;
+            }
+            case OP_SUB: {
+                Value b = stack_.back(); stack_.pop_back();
+                Value a = stack_.back(); stack_.pop_back();
+                if (a.type == Value::INT && b.type == Value::INT) {
+                    stack_.push_back(Value(a.i - b.i));
+                } else if (a.type == Value::FLOAT && b.type == Value::FLOAT) {
+                    stack_.push_back(Value(a.f - b.f));
+                } else if (a.type == Value::INT && b.type == Value::FLOAT) {
+                    stack_.push_back(Value(a.i - b.f));
+                } else if (a.type == Value::FLOAT && b.type == Value::INT) {
+                    stack_.push_back(Value(a.f - b.i));
+                }
+                break;
+            }
+            case OP_MUL: {
+                Value b = stack_.back(); stack_.pop_back();
+                Value a = stack_.back(); stack_.pop_back();
+                if (a.type == Value::INT && b.type == Value::INT) {
+                    stack_.push_back(Value(a.i * b.i));
+                } else if (a.type == Value::FLOAT && b.type == Value::FLOAT) {
+                    stack_.push_back(Value(a.f * b.f));
+                } else if (a.type == Value::INT && b.type == Value::FLOAT) {
+                    stack_.push_back(Value(a.i * b.f));
+                } else if (a.type == Value::FLOAT && b.type == Value::INT) {
+                    stack_.push_back(Value(a.f * b.i));
+                }
+                break;
+            }
+            case OP_DIV: {
+                Value b = stack_.back(); stack_.pop_back();
+                Value a = stack_.back(); stack_.pop_back();
+                if (a.type == Value::INT && b.type == Value::INT) {
+                    stack_.push_back(Value(a.i / b.i));
+                } else if (a.type == Value::FLOAT && b.type == Value::FLOAT) {
+                    stack_.push_back(Value(a.f / b.f));
+                } else if (a.type == Value::INT && b.type == Value::FLOAT) {
+                    stack_.push_back(Value(a.i / b.f));
+                } else if (a.type == Value::FLOAT && b.type == Value::INT) {
+                    stack_.push_back(Value(a.f / b.i));
+                }
+                break;
+            }
+            case OP_MOD: {
+                Value b = stack_.back(); stack_.pop_back();
+                Value a = stack_.back(); stack_.pop_back();
+                if (a.type == Value::INT && b.type == Value::INT) {
+                    stack_.push_back(Value(a.i % b.i));
+                }
+                break;
+            }
+            case OP_LT: {
+                Value b = stack_.back(); stack_.pop_back();
+                Value a = stack_.back(); stack_.pop_back();
+                bool result = false;
+                if (a.type == Value::INT && b.type == Value::INT) {
+                    result = (a.i < b.i);
+                } else if (a.type == Value::FLOAT && b.type == Value::FLOAT) {
+                    result = (a.f < b.f);
+                }
+                stack_.push_back(Value(result));
+                break;
+            }
+            case OP_LE: {
+                Value b = stack_.back(); stack_.pop_back();
+                Value a = stack_.back(); stack_.pop_back();
+                bool result = false;
+                if (a.type == Value::INT && b.type == Value::INT) {
+                    result = (a.i <= b.i);
+                } else if (a.type == Value::FLOAT && b.type == Value::FLOAT) {
+                    result = (a.f <= b.f);
+                }
+                stack_.push_back(Value(result));
+                break;
+            }
+            case OP_GT: {
+                Value b = stack_.back(); stack_.pop_back();
+                Value a = stack_.back(); stack_.pop_back();
+                bool result = false;
+                if (a.type == Value::INT && b.type == Value::INT) {
+                    result = (a.i > b.i);
+                } else if (a.type == Value::FLOAT && b.type == Value::FLOAT) {
+                    result = (a.f > b.f);
+                }
+                stack_.push_back(Value(result));
+                break;
+            }
+            case OP_GE: {
+                Value b = stack_.back(); stack_.pop_back();
+                Value a = stack_.back(); stack_.pop_back();
+                bool result = false;
+                if (a.type == Value::INT && b.type == Value::INT) {
+                    result = (a.i >= b.i);
+                } else if (a.type == Value::FLOAT && b.type == Value::FLOAT) {
+                    result = (a.f >= b.f);
+                }
+                stack_.push_back(Value(result));
+                break;
+            }
+            case OP_EQ: {
+                Value b = stack_.back(); stack_.pop_back();
+                Value a = stack_.back(); stack_.pop_back();
+                bool result = false;
+                if (a.type == b.type) {
+                    switch (a.type) {
+                        case Value::INT: result = (a.i == b.i); break;
+                        case Value::FLOAT: result = (a.f == b.f); break;
+                        case Value::BOOL: result = (a.b == b.b); break;
+                        case Value::STRING: result = (a.s == b.s); break;
+                        default: result = false; break;
+                    }
+                }
+                stack_.push_back(Value(result));
+                break;
+            }
+            case OP_NE: {
+                Value b = stack_.back(); stack_.pop_back();
+                Value a = stack_.back(); stack_.pop_back();
+                bool result = false;
+                if (a.type == b.type) {
+                    switch (a.type) {
+                        case Value::INT: result = (a.i != b.i); break;
+                        case Value::FLOAT: result = (a.f != b.f); break;
+                        case Value::BOOL: result = (a.b != b.b); break;
+                        case Value::STRING: result = (a.s != b.s); break;
+                        default: result = false; break;
+                    }
+                } else {
+                    result = true; // different types are not equal
+                }
+                stack_.push_back(Value(result));
                 break;
             }
             case OP_JUMP: {
@@ -109,6 +252,7 @@ void ThisVM::thisX_run() {
                 bool isFalse = false;
                 if (cond.type == Value::INT && cond.i == 0) isFalse = true;
                 else if (cond.type == Value::FLOAT && cond.f == 0.0f) isFalse = true;
+                else if (cond.type == Value::BOOL && !cond.b) isFalse = true;
                 else if (cond.type == Value::NIL) isFalse = true;
                 if (isFalse) pc_ = target;
                 break;
@@ -170,6 +314,27 @@ void ThisVM::thisX_run() {
                 stack_.push_back(result);
                 break;
             }
+            case OP_CALL_GLOBAL: {
+                uint32_t nameIdx = readU32();
+                uint32_t argCount = readU32();
+
+                std::vector<Value> args(argCount);
+                for (int i = argCount-1; i >= 0; --i) {
+                    args[i] = stack_.back();
+                    stack_.pop_back();
+                }
+
+                const std::string& funcName = constants_[nameIdx].s;
+                auto funcIt = builtinGlobals_.find(funcName);
+                if (funcIt == builtinGlobals_.end()) {
+                    std::cerr << "Global function not found: " << funcName << "\n";
+                    exit(1);
+                }
+
+                Value result = funcIt->second(args);
+                stack_.push_back(result);
+                break;
+            }
             case OP_RETURN: {
                 Frame oldFrame = callStack_.back(); callStack_.pop_back();
                 if (callStack_.empty()) {
@@ -206,47 +371,6 @@ void ThisVM::printValue(const Value& v) {
         case Value::FLOAT: std::cout << v.f; break;
         case Value::STRING: std::cout << v.s; break;
         case Value::TABLE: std::cout << "{table}"; break;
+        case Value::BOOL: std::cout << (v.b ? "true" : "false"); break;
     }
-}
-
-ThisVM::ThisVM() {
-    // ehh this sucks and needs its own file eventually but whatever
-    builtinModules_["io"]["print"] = [](const std::vector<Value>& args) -> Value {
-        for (size_t i = 0; i < args.size(); ++i) {
-            if (i > 0) std::cout << " ";
-            if (args[i].type == Value::STRING) {
-                std::cout << args[i].s;
-            }
-        }
-        return Value(); // nil
-    };
-    builtinModules_["io"]["println"] = [](const std::vector<Value>& args) -> Value {
-        for (size_t i = 0; i < args.size(); ++i) {
-            if (i > 0) std::cout << " ";
-            if (args[i].type == Value::STRING) {
-                std::cout << args[i].s;
-            }
-        }
-        std::cout << "\n";
-        return Value(); // nil
-    };
-    builtinModules_["io"]["input"] = []( [[maybe_unused]] const std::vector<Value>& args) -> Value {
-        std::string line;
-        std::getline(std::cin, line);
-        return Value(line);
-    };
-}
-
-int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::cerr << "Usage: tvm <*.tbc>\n";
-        return 1;
-    }
-    ThisVM vm;
-    if (!vm.thisX_load(argv[1])) {
-        std::cerr << "Failed to load bytecode\n";
-        return 1;
-    }
-    vm.thisX_run();
-    return 0;
 }

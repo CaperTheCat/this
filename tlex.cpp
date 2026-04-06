@@ -3,10 +3,10 @@
 #include <this.hpp>
 #include <tlex.hpp>
 
-std::array<std::string, 7> RESERVED_WORDS = {"import", "int", "float", "string", "void", "while", "def"};
+std::array<std::string, 12> RESERVED_WORDS = {"import", "int", "float", "string", "void", "while", "def", "true", "false", "if", "elif", "else"};
 
 ThisLexer::ThisLexer(const std::string& source) : source_(source) {
-    icurrent = 0;
+    icurrent = 0; // index in source
     current_line = 1;
     last_line = 1;
     look_ahead.what = TK_END;
@@ -113,6 +113,26 @@ ReservedTK ThisLexer::tlex() {
                     }
                     break;  // continue scanning
                 }
+                if (current == '*') { // block comment
+                    nom_nom();
+                    while (true) {
+                        if (current == '\0') {
+                            thisX_check(TK_END, "Unterminated block comment");
+                            return TK_END;
+                        }
+                        if (current == '*' && icurrent + 1 < source_.size() && source_[icurrent + 1] == '/') {
+                            nom_nom(); // consume '*'
+                            nom_nom(); // consume '/'
+                            break; // end of block comment
+                        }
+                        if (current == '\n' || current == '\r') {
+                            inc_line();
+                        } else {
+                            nom_nom();
+                        }
+                    }
+                    break; // continue scanning
+                }
                 return TK_DIV;   // single then
             case '-':
                 nom_nom();
@@ -169,7 +189,21 @@ ReservedTK ThisLexer::tlex() {
                     nom_nom();
                     return TK_NE;
                 }
-                thisX_check(TK_END, "Did you mean '!='?"); // no single
+                thisX_check(TK_END, "Did you mean '!='?"); // no single... for now 
+                return TK_END;
+            case '&':
+                nom_nom();
+                if (current == '&') {
+                    nom_nom();
+                    return TK_AND;
+                }
+                return TK_END;
+            case '|':
+                nom_nom();
+                if (current == '|') {
+                    nom_nom();
+                    return TK_OR;
+                }
                 return TK_END;
             // skip this line we're at end
             case '\n': case '\r':

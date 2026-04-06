@@ -5,10 +5,11 @@
 
 // stack vals
 struct Value {
-    enum Type { NIL, INT, FLOAT, STRING, TABLE } type = NIL;
+    enum Type { NIL, INT, FLOAT, STRING, BOOL, TABLE } type = NIL;
     union {
         int i;
         float f;
+        bool b;
     };
     std::string s;
     std::map<std::string, Value> table; // simple table for now lol
@@ -16,6 +17,7 @@ struct Value {
     Value() : type(NIL) {}
     Value(int v) : type(INT), i(v) {}
     Value(float v) : type(FLOAT), f(v) {}
+    Value(bool v) : type(BOOL), b(v) {}
     Value(const std::string& v) : type(STRING), s(v) {}
     Value(std::map<std::string, Value> t) : type(TABLE), table(std::move(t)) {}
 };
@@ -37,8 +39,6 @@ class ThisVM {
     THISX_FUNC bool thisX_load(const std::string& filename);
     THISX_FUNC void thisX_run();
 
-    ThisVM();
-
     std::vector<Value> constants_;
     std::vector<Value> globals_;
     std::vector<Function> functions_;
@@ -46,6 +46,7 @@ class ThisVM {
     std::vector<Value> stack_; // value stack for computations
     std::vector<uint8_t> code_;
     std::map<std::string, std::map<std::string, std::function<Value(const std::vector<Value>&)>>> builtinModules_;
+    std::map<std::string, std::function<Value(const std::vector<Value>&)>> builtinGlobals_;
     size_t pc_ = 0; // pc within current func
 
     size_t currentFuncIndex_;

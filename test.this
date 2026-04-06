@@ -1,0 +1,19 @@
+import io
+
+assert(1 == 1)
+
+// any number of args
+def thing(...) -> int {
+
+}
+// any number of args with type
+def thing(...: int) -> int {
+    // yeesh doesn't that look kinda ugly
+    extra: {int} = {...} // shoud make sure everything in the set is an int
+}
+
+def thing(...) -> void {
+    extra = {...}
+}
+
+io.print("gy")

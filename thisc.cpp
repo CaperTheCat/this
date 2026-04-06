@@ -1,7 +1,9 @@
 #include <this.hpp>
 #include <thisc.hpp>
 
-uint32_t ThisCompiler::addConstant(const std::variant<int, float, std::string>& val) {
+static const std::set<std::string> builtinGlobals = {"assert"};
+
+uint32_t ThisCompiler::addConstant(const std::variant<int, float, bool, std::string>& val) {
     if (std::holds_alternative<std::string>(val)) {
         const auto& s = std::get<std::string>(val);
         auto it = constMap_.find(s);
@@ -9,6 +11,15 @@ uint32_t ThisCompiler::addConstant(const std::variant<int, float, std::string>& 
         uint32_t idx = constants_.size();
         constants_.push_back(val);
         constMap_[s] = idx;
+        return idx;
+    } else if (std::holds_alternative<bool>(val)) {
+        bool b = std::get<bool>(val);
+        std::string key = b ? "true" : "false";
+        auto it = constMap_.find(key);
+        if (it != constMap_.end()) return it->second;
+        uint32_t idx = constants_.size();
+        constants_.push_back(val);
+        constMap_[key] = idx;
         return idx;
     } else {
         // numbers: always add (no dedup)
@@ -85,6 +96,17 @@ void ThisCompiler::collectLocals(AstNode* node, std::map<std::string, uint32_t>&
             for (auto& stmt : w->body) collectLocals(stmt.get(), localMap);
             break;
         }
+        case AstNodeType::IF_STMT: {
+            auto ifs = static_cast<IfStmt*>(node);
+            collectLocals(ifs->condition.get(), localMap);
+            for (auto& stmt : ifs->body) collectLocals(stmt.get(), localMap);
+            for (auto& elif : ifs->elifs) {
+                collectLocals(elif.first.get(), localMap);
+                for (auto& stmt : elif.second) collectLocals(stmt.get(), localMap);
+            }
+            for (auto& stmt : ifs->elseBody) collectLocals(stmt.get(), localMap);
+            break;
+        }
         case AstNodeType::BINARY_EXPR: {
             auto b = static_cast<BinaryExpr*>(node);
             collectLocals(b->left.get(), localMap);
@@ -151,6 +173,69 @@ void ThisCompiler::generateStmt(AstNode* node, std::vector<uint8_t>& code, std::
             uint32_t target = code.size();
             for (size_t i = 0; i < 4; ++i) {
                 code[jumpPos + i] = (target >> (i*8)) & 0xFF;
+            }
+            break;
+        }
+        case AstNodeType::IF_STMT: {
+            auto ifs = static_cast<IfStmt*>(node);
+            std::vector<size_t> endJumpPositions; // positions of jumps to end
+            size_t ifJumpPos = 0;
+
+            // if condition
+            generateExpr(ifs->condition.get(), code, localMap);
+            emitOp(code, OP_JUMP_IF_FALSE);
+            ifJumpPos = code.size();
+            emitU32(code, 0); // placeholder
+            for (auto& stmt : ifs->body) {
+                generateStmt(stmt.get(), code, localMap);
+            }
+            emitOp(code, OP_JUMP);
+            endJumpPositions.push_back(code.size());
+            emitU32(code, 0); // to end
+
+            // elifs
+            for (auto& elif : ifs->elifs) {
+                // patch previous jump to here
+                size_t target = code.size();
+                for (size_t i = 0; i < 4; ++i) {
+                    code[ifJumpPos + i] = (target >> (i*8)) & 0xFF;
+                }
+                generateExpr(elif.first.get(), code, localMap);
+                emitOp(code, OP_JUMP_IF_FALSE);
+                ifJumpPos = code.size();
+                emitU32(code, 0);
+                for (auto& stmt : elif.second) {
+                    generateStmt(stmt.get(), code, localMap);
+                }
+                emitOp(code, OP_JUMP);
+                endJumpPositions.push_back(code.size());
+                emitU32(code, 0);
+            }
+
+            // else
+            if (!ifs->elseBody.empty()) {
+                // patch last jump to here
+                size_t target = code.size();
+                for (size_t i = 0; i < 4; ++i) {
+                    code[ifJumpPos + i] = (target >> (i*8)) & 0xFF;
+                }
+                for (auto& stmt : ifs->elseBody) {
+                    generateStmt(stmt.get(), code, localMap);
+                }
+            } else {
+                // patch last jump to here
+                size_t target = code.size();
+                for (size_t i = 0; i < 4; ++i) {
+                    code[ifJumpPos + i] = (target >> (i*8)) & 0xFF;
+                }
+            }
+
+            // patch all end jumps
+            size_t endTarget = code.size();
+            for (size_t pos : endJumpPositions) {
+                for (size_t i = 0; i < 4; ++i) {
+                    code[pos + i] = (endTarget >> (i*8)) & 0xFF;
+                }
             }
             break;
         }
@@ -247,6 +332,16 @@ void ThisCompiler::generateExpr(AstNode* node, std::vector<uint8_t>& code, std::
                 auto var = static_cast<VariableExpr*>(call->callee.get());
                 auto it = funcNameToIndex_.find(var->name);
                 if (it == funcNameToIndex_.end()) {
+                    if (builtinGlobals.count(var->name)) {
+                        for (auto& arg : call->arguments) {
+                            generateExpr(arg.get(), code, localMap);
+                        }
+                        uint32_t nameIdx = addConstant(var->name);
+                        emitOp(code, OP_CALL_GLOBAL);
+                        emitU32(code, nameIdx);
+                        emitU32(code, call->arguments.size());
+                        break;
+                    }
                     std::cerr << "Undefined function: " << var->name << "\n";
                     exit(1);
                 }
@@ -320,6 +415,11 @@ void ThisCompiler::writeFile(const std::string& filename) {
             uint32_t len = s.size();
             out.write(reinterpret_cast<const char*>(&len), 4);
             out.write(s.data(), len);
+        } else if (std::holds_alternative<bool>(c)) {
+            uint8_t type = 3;
+            out.write(reinterpret_cast<const char*>(&type), 1);
+            bool val = std::get<bool>(c);
+            out.write(reinterpret_cast<const char*>(&val), 1);
         }
     }
 
@@ -341,33 +441,4 @@ void ThisCompiler::compile(const std::string& outputFile) {
     collectFunctions(ast_.get());
     generateCode();
     writeFile(outputFile);
-}
-
-int main(int argc, char** argv) {
-    if (argc < 2) {
-        // might add support for source.th for convenience yknow
-        std::cerr << "Usage: thisc <source.this> [output.tbc]\n";
-        return 1;
-    }
-    std::string sourceFile = argv[1];
-    std::string outputFile = (argc >= 3) ? argv[2] : "out.tbc";
-
-    std::ifstream in(sourceFile);
-    if (!in) {
-        std::cerr << "Cannot open source file\n";
-        return 1;
-    }
-    std::string source((std::istreambuf_iterator<char>(in)),
-                        std::istreambuf_iterator<char>());
-    in.close();
-
-    ThisLexer lexer(source);
-    ThisParser parser(lexer);
-    auto ast = parser.thisX_parseProgram();
-
-    ThisCompiler compiler(std::move(ast));
-    compiler.compile(outputFile);
-
-    std::cout << "Compiled to " << outputFile << "\n";
-    return 0;
 }

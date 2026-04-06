@@ -82,6 +82,60 @@ AstNodePtr ThisParser::parseWhileStmt() {
     return std::make_unique<WhileStmt>(std::move(cond), std::move(body));
 }
 
+AstNodePtr ThisParser::parseIfStmt() {
+    consume(TK_RSV, "Expected 'if'"); // already consumed the 'if' token
+
+    // optional '('
+    bool hasParen = match(TK_LPAREN);
+    auto cond = parseExpr();
+    if (hasParen) consume(TK_RPAREN, "Expected ')' after condition");
+
+    // body must be a block
+    consume(TK_LBRACE, "Expected '{' to start if body");
+    std::vector<AstNodePtr> body;
+    while (!check(TK_RBRACE) && !check(TK_END)) {
+        auto stmt = parseStatement();
+        if (stmt) body.push_back(std::move(stmt));
+        else advance(); // skip (shouldn't happen)
+    }
+    consume(TK_RBRACE, "Expected '}' after if body");
+
+    std::vector<std::pair<AstNodePtr, std::vector<AstNodePtr>>> elifs;
+    std::vector<AstNodePtr> elseBody;
+
+    // elif?
+    while (check(TK_RSV) && std::get<std::string>(currentToken.semantics) == "elif") {
+        advance(); // eat 'elif'
+        bool hasParenElif = match(TK_LPAREN);
+        auto elifCond = parseExpr();
+        if (hasParenElif) consume(TK_RPAREN, "Expected ')' after elif condition");
+
+        consume(TK_LBRACE, "Expected '{' to start elif body");
+        std::vector<AstNodePtr> elifBody;
+        while (!check(TK_RBRACE) && !check(TK_END)) {
+            auto stmt = parseStatement();
+            if (stmt) elifBody.push_back(std::move(stmt));
+            else advance();
+        }
+        consume(TK_RBRACE, "Expected '}' after elif body");
+        elifs.emplace_back(std::move(elifCond), std::move(elifBody));
+    }
+
+    // clse?
+    if (check(TK_RSV) && std::get<std::string>(currentToken.semantics) == "else") {
+        advance(); // nom 'else'
+        consume(TK_LBRACE, "Expected '{' to start else body");
+        while (!check(TK_RBRACE) && !check(TK_END)) {
+            auto stmt = parseStatement();
+            if (stmt) elseBody.push_back(std::move(stmt));
+            else advance();
+        }
+        consume(TK_RBRACE, "Expected '}' after else body");
+    }
+
+    return std::make_unique<IfStmt>(std::move(cond), std::move(body), std::move(elifs), std::move(elseBody));
+}
+
 AstNodePtr ThisParser::parseStatement() {
     if (check(TK_RSV)) {
         std::string word = std::get<std::string>(currentToken.semantics);
@@ -94,6 +148,10 @@ AstNodePtr ThisParser::parseStatement() {
         else if (word == "def") {
             return parseFunctionDef();
         }
+        else if (word == "if") {
+            return parseIfStmt();
+        }
+
         else {
             thisX_error("Unexpected reserved word: " + word);
         }
@@ -134,6 +192,18 @@ AstNodePtr ThisParser::parsePrimary() {
         std::string val = std::get<std::string>(currentToken.semantics);
         advance();
         return std::make_unique<LiteralExpr>(val);
+    } else if (check(TK_RSV)) {
+        std::string word = std::get<std::string>(currentToken.semantics);
+        if (word == "true") {
+            advance();
+            return std::make_unique<LiteralExpr>(true);
+        } else if (word == "false") {
+            advance();
+            return std::make_unique<LiteralExpr>(false);
+        } else {
+            thisX_error("Unexpected reserved word in expression: " + word);
+            return nullptr;
+        }
     } else if (check(TK_NAME)) {
         std::string name = std::get<std::string>(currentToken.semantics);
         advance();

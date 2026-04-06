@@ -4,7 +4,7 @@
 #include <this.hpp>
 #include <tparse.hpp>
 
-static const std::set<std::string> builtinModules = {"io"};
+static const std::set<std::string> builtinModules = {"io", "math"};
 
 // bytecode ops
 enum OpCode : uint8_t {
@@ -26,6 +26,7 @@ enum OpCode : uint8_t {
     OP_EQ, 
     OP_NE, 
     OP_CALL_MODULE,
+    OP_CALL_GLOBAL, // u32 func_name_const_index, u32 arg_count
     OP_LOAD_LOCAL,  // u32 local_index
     OP_STORE_LOCAL, // u32 local_index
     OP_CALL, // u32 func_index, u32 arg_count
@@ -83,9 +84,9 @@ private:
     void writeFile(const std::string& filename);
 
     // constant table (global)
-    std::vector<std::variant<int, float, std::string>> constants_;
+    std::vector<std::variant<int, float, bool, std::string>> constants_;
     std::map<std::string, uint32_t> constMap_;
-    uint32_t addConstant(const std::variant<int, float, std::string>& val);
+    uint32_t addConstant(const std::variant<int, float, bool, std::string>& val);
 };
 
 #endif // THISC_HPP
